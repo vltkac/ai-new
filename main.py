@@ -1,30 +1,71 @@
-import cv2
-import ultralytics
+# LLM
+# Large language model
+
+# загрузка API ключа с ключа .env как переменную среды
+
+# import os
+# import dotenv
+#
+#
+# dotenv.load_dotenv()
+# api_key = os.getenv('GEMINI_API_KEY')
+#
+# import langchain
+# from langchain_google_genai import GoogleGenerativeAI
+#
+#
+# llm = GoogleGenerativeAI(
+#     model='gemini-2.5-flash-lite',
+#     api_key=api_key
+# )
+#
+# response = llm.invoke('Hello, what are your salary expectations?')
+# print(response)
 
 
-model = ultralytics.YOLO('yolov8s.pt')
+# Завдання 1
+# Підключіть модель LLM за допомогою свого API key.
+# Попросіть модель згенерувати:
+# ● відповідь на питання у вигляді одного
+# слова(наприклад яка столиця Франції?)
+# ● код python
+# ● коротку історію
+# Підберіть параметри креативності та довжини
 
-cap = cv2.VideoCapture('meetings.mp4')
+import os
+import dotenv
+from langchain_google_genai import GoogleGenerativeAI
 
-while True:
-    success, frame = cap.read()
 
-    if not success:
-        break
+dotenv.load_dotenv()
 
-    if cv2.waitKey(20) & 0xFF == 27:
-        break
+API_KEY = os.getenv('GEMINI_API_KEY')
 
-    frame = cv2.resize(frame, None, fx=0.2, fy=0.2)
+llm = GoogleGenerativeAI(
+    model='gemini-2.5-flash-lite',
+    temperature=0
+)
 
-    results = model.predict(frame, conf=0.25, iou=0.6, classes=[0])
-    result = results[0]
-    people_counter = len(result.boxes.cls)
+user_input = input('Your question: ')
+# command1 = 'дай ответ одним словом. если ответ два и больше слова, то давай полный ответ. '
+# command_py = 'write response of the python code (only): '
+command_story = 'write story within 4 sentences. be creative and fun. '
 
-    result_frame = result.plot()
+response = llm.invoke(command_story + user_input)
+print(response)
 
-    if people_counter == 5:
-        cv2.imshow('orig', frame)
-        cv2.imshow('res', result_frame)
 
-cap.release()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
