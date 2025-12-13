@@ -1,70 +1,33 @@
-import cv2
-import numpy as np
-from ultralytics import YOLO
+import os
+import dotenv
+from langchain_google_genai import GoogleGenerativeAI
 
 
-def calculate_angle(p1, p2, p3):
-    v1 = p1 - p2
-    v2 = p3 - p2
-    cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-    return np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
+dotenv.load_dotenv()
 
+API_KEY = os.getenv('GEMINI_API_KEY')
 
-def kp(xy, idx):
-    return xy[0, idx]
+llm = GoogleGenerativeAI(
+    model='gemini-2.5-flash-lite',
+    top_k=3,
+    top_p=0.9,
+    temperature=0
+)
 
+with open('return_policy.txt', 'r', encoding='utf-8') as f:
+    source_data = f.read()
 
-video = cv2.VideoCapture('data/lesson_pose/squat.mp4')
-model = YOLO('yolo11s-pose.pt')
+print(source_data)
 
-move_down = True
-counter = 0
+while True:
+    user_input = input('Ваше питання щодо умов повернення товару: ').strip()
 
-while video.isOpened():
-    ok, frame = video.read()
-    if not ok:
+    if not user_input:
         break
 
-    frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
-    result = model.predict(frame, verbose=False)[0]
-    frame = result.plot()
+    instruction = f'відповідай лише на питання щодо умов повернення товару, якщо користувач запитує не по темі, сухо відповідай, що питання не стосується умов повернення товару". '\
+                  f'Відповідай мовою, якою написане це речення:"{user_input}".'
 
-    if result.keypoints is None:
-        cv2.imshow("Pose", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-        continue
+    response = llm.invoke(f'{source_data}\n{instruction}\n{user_input}')
 
-    xy = result.keypoints.xy
-
-    hip = kp(xy, 12)
-    knee = kp(xy, 14)
-    ankle = kp(xy, 16)
-
-    angle = calculate_angle(hip, knee, ankle)
-
-    if angle < 70 and move_down:
-        counter += 1
-        move_down = False
-
-    if angle > 160 and not move_down:
-        move_down = True
-
-    cv2.putText(
-        frame,
-        f"Squats: {counter}",
-        (20, 30),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
-        (255, 255, 255),
-        2
-    )
-
-    cv2.imshow("Pose", frame)
-    print(int(angle))
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-video.release()
-cv2.destroyAllWindows()
+    print(response)
