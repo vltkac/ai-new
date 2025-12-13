@@ -1,36 +1,70 @@
-import numpy as np
-import ultralytics
 import cv2
+import numpy as np
+from ultralytics import YOLO
 
 
-model = ultralytics.YOLO('brain-tumor-seg.pt')
-orig_img = cv2.imread('tumor1.jpg')
+def calculate_angle(p1, p2, p3):
+    v1 = p1 - p2
+    v2 = p3 - p2
+    cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+    return np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
 
-model_results = model.predict(orig_img)
-orig_model_result = model_results[0]
-orig_model_result_plot = orig_model_result.plot()
 
-orig_model_result_mask = orig_model_result.masks.data[0]
-orig_model_result_mask = orig_model_result_mask.numpy()
+def kp(xy, idx):
+    return xy[0, idx]
 
-orig_model_result_mask_area_px = orig_model_result_mask.sum()
-orig_model_result_mask_area_sm = orig_model_result_mask_area_px * 0.0025
-print(orig_model_result_mask_area_sm)
 
-if orig_model_result_mask_area_sm < 10:
-    tumor_type = "small tumor"
+video = cv2.VideoCapture('data/lesson_pose/squat.mp4')
+model = YOLO('yolo11s-pose.pt')
 
-elif 25 >= orig_model_result_mask_area_sm >= 10:
-    tumor_type = "middle tumor"
+move_down = True
+counter = 0
 
-else:
-    tumor_type = "large tumor"
+while video.isOpened():
+    ok, frame = video.read()
+    if not ok:
+        break
 
-orig_model_result_mask = orig_model_result_mask.astype(np.uint8)
-orig_model_result_mask *= 255
-orig_model_result_mask = orig_model_result_mask.astype(bool)
+    frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
+    result = model.predict(frame, verbose=False)[0]
+    frame = result.plot()
 
-orig_img[~orig_model_result_mask] = 0
+    if result.keypoints is None:
+        cv2.imshow("Pose", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+        continue
 
-cv2.imshow(f'{tumor_type}', orig_img)
-cv2.waitKey(0)
+    xy = result.keypoints.xy
+
+    hip = kp(xy, 12)
+    knee = kp(xy, 14)
+    ankle = kp(xy, 16)
+
+    angle = calculate_angle(hip, knee, ankle)
+
+    if angle < 70 and move_down:
+        counter += 1
+        move_down = False
+
+    if angle > 160 and not move_down:
+        move_down = True
+
+    cv2.putText(
+        frame,
+        f"Squats: {counter}",
+        (20, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (255, 255, 255),
+        2
+    )
+
+    cv2.imshow("Pose", frame)
+    print(int(angle))
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+video.release()
+cv2.destroyAllWindows()
