@@ -1,71 +1,36 @@
-# LLM
-# Large language model
-
-# загрузка API ключа с ключа .env как переменную среды
-
-# import os
-# import dotenv
-#
-#
-# dotenv.load_dotenv()
-# api_key = os.getenv('GEMINI_API_KEY')
-#
-# import langchain
-# from langchain_google_genai import GoogleGenerativeAI
-#
-#
-# llm = GoogleGenerativeAI(
-#     model='gemini-2.5-flash-lite',
-#     api_key=api_key
-# )
-#
-# response = llm.invoke('Hello, what are your salary expectations?')
-# print(response)
+import numpy as np
+import ultralytics
+import cv2
 
 
-# Завдання 1
-# Підключіть модель LLM за допомогою свого API key.
-# Попросіть модель згенерувати:
-# ● відповідь на питання у вигляді одного
-# слова(наприклад яка столиця Франції?)
-# ● код python
-# ● коротку історію
-# Підберіть параметри креативності та довжини
+model = ultralytics.YOLO('brain-tumor-seg.pt')
+orig_img = cv2.imread('tumor1.jpg')
 
-import os
-import dotenv
-from langchain_google_genai import GoogleGenerativeAI
+model_results = model.predict(orig_img)
+orig_model_result = model_results[0]
+orig_model_result_plot = orig_model_result.plot()
 
+orig_model_result_mask = orig_model_result.masks.data[0]
+orig_model_result_mask = orig_model_result_mask.numpy()
 
-dotenv.load_dotenv()
+orig_model_result_mask_area_px = orig_model_result_mask.sum()
+orig_model_result_mask_area_sm = orig_model_result_mask_area_px * 0.0025
+print(orig_model_result_mask_area_sm)
 
-API_KEY = os.getenv('GEMINI_API_KEY')
+if orig_model_result_mask_area_sm < 10:
+    tumor_type = "small tumor"
 
-llm = GoogleGenerativeAI(
-    model='gemini-2.5-flash-lite',
-    temperature=0
-)
+elif 25 >= orig_model_result_mask_area_sm >= 10:
+    tumor_type = "middle tumor"
 
-user_input = input('Your question: ')
-# command1 = 'дай ответ одним словом. если ответ два и больше слова, то давай полный ответ. '
-# command_py = 'write response of the python code (only): '
-command_story = 'write story within 4 sentences. be creative and fun. '
+else:
+    tumor_type = "large tumor"
 
-response = llm.invoke(command_story + user_input)
-print(response)
+orig_model_result_mask = orig_model_result_mask.astype(np.uint8)
+orig_model_result_mask *= 255
+orig_model_result_mask = orig_model_result_mask.astype(bool)
 
+orig_img[~orig_model_result_mask] = 0
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+cv2.imshow(f'{tumor_type}', orig_img)
+cv2.waitKey(0)
