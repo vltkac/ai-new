@@ -1,8 +1,8 @@
-# Завдання 1
-# Напишіть модель для рекомендації книг з двох ланцюгів
-#  Перший ланцюг отримує назву книги та визначає її жанр
-#  Другий отримує назву книги, жанр та повертає список
-# схожих книг(того ж самого жанру та іншого)
+# Напишіть модель для генерації резюме:
+#  Перший ланцюг отримує опис вакансії та повертає
+# основні навички, які необхідні
+#  Другий ланцюг отримує основні навички та опис
+# кандидата і генерує резюме
 
 import os
 import dotenv
@@ -24,29 +24,29 @@ llm = GoogleGenerativeAI(
     temperature=0
 )
 
-class BookInfo(BaseModel)
-    genre str = Field(description='жанр книги')
+class Quality(BaseModel):
+    quals: List[str] = Field(description='свойства, которые нужны для вакансии')
 
-parser = PydanticOutputParser(pydantic_object=BookInfo)
+parser_1 = PydanticOutputParser(pydantic_object=Quality)
+guide_1 = parser_1.get_format_instructions()
 
-instructions = parser.get_format_instructions()
+prompt = PromptTemplate.from_template("""
+Ты - HR-специалист. Твоя задача - передавать список основных качеств человека, которые необходимы для вакансии.
 
-prompt = PromptTemplate.from_template("""Ти - бібліотекар. Твоє завдання полягає в тому, щоб визначати жанри книг.
-### ІСТРУКЦІЇ
-{instructions}
+### ИНСТРУКЦИИ
+{guide}
 
-### НАЗВА КНИГИ
-{book_title}"""
-, partial_variables={'instructions': instructions})
+### ВАКАНСИЯ
+{position}
+""", partial_variables={'guide': guide_1})
 
-chain1 = prompt | llm | parser
+chain_1 = prompt | llm | parser_1
 
-user_book = input('Введіть назву книги ')
-
-response = chain1.invoke({
-    'book_title': user_book
+response_1 = chain_1.invoke({
+    'guide': "Программист"
 })
 
+<<<<<<< HEAD
 class UpgradedBookInfo(BaseModel):
     books: List[str] = Field(description='список схожих книг')
 
@@ -73,3 +73,6 @@ full_response = chain1.invoke({
 
 for book in full_response.books:
     print(book)
+=======
+print(response_1.quals)
+>>>>>>> aa7f7a2 (.)
