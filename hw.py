@@ -6,6 +6,7 @@ from langchain_google_genai import GoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 
+
 dotenv.load_dotenv()
 API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -15,7 +16,6 @@ llm = GoogleGenerativeAI(
     temperature=0
 )
 
-# ---------- ПЕРШИЙ ЛАНЦЮГ ----------
 
 class ExerciseList(BaseModel):
     exercises: List[str] = Field(description="список вправ відповідно до мети тренувань")
@@ -44,7 +44,6 @@ exercise_response = chain_1.invoke({
     "target": user_target
 })
 
-# ---------- ДРУГИЙ ЛАНЦЮГ ----------
 
 class TrainingPlan(BaseModel):
     plan: str = Field(description="детальний план тренувань на тиждень")
