@@ -1,9 +1,3 @@
-# Напишіть модель для генерації резюме:
-#  Перший ланцюг отримує опис вакансії та повертає
-# основні навички, які необхідні
-#  Другий ланцюг отримує основні навички та опис
-# кандидата і генерує резюме
-
 import os
 import dotenv
 from typing import List
@@ -12,67 +6,82 @@ from langchain_google_genai import GoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 
-from langchain_google_genai import GoogleGenerativeAI
-from langchain_core.prompts import PromptTemplate
-
 dotenv.load_dotenv()
-API_KEY = os.getenv(GEMINI_API_KEY)
+API_KEY = os.getenv("GEMINI_API_KEY")
 
 llm = GoogleGenerativeAI(
-    model='gemini-2.5-flash',
+    model="gemini-2.5-flash",
     api_key=API_KEY,
     temperature=0
 )
 
-class Quality(BaseModel):
-    quals: List[str] = Field(description='свойства, которые нужны для вакансии')
+# ---------- ПЕРШИЙ ЛАНЦЮГ ----------
 
-parser_1 = PydanticOutputParser(pydantic_object=Quality)
-guide_1 = parser_1.get_format_instructions()
+class ExerciseList(BaseModel):
+    exercises: List[str] = Field(description="список вправ відповідно до мети тренувань")
 
-prompt = PromptTemplate.from_template("""
-Ты - HR-специалист. Твоя задача - передавать список основных качеств человека, которые необходимы для вакансии.
+parser_1 = PydanticOutputParser(pydantic_object=ExerciseList)
+instructions_1 = parser_1.get_format_instructions()
 
-### ИНСТРУКЦИИ
-{guide}
+prompt_1 = PromptTemplate.from_template(
+    """Ти — професійний фітнес-тренер.
+На основі мети тренувань підбери відповідний список вправ.
 
-### ВАКАНСИЯ
-{position}
-""", partial_variables={'guide': guide_1})
-
-chain_1 = prompt | llm | parser_1
-
-response_1 = chain_1.invoke({
-    'guide': "Программист"
-})
-
-<<<<<<< HEAD
-class UpgradedBookInfo(BaseModel):
-    books: List[str] = Field(description='список схожих книг')
-
-parser = PydanticOutputParser(pydantic_object=UpgradedBookInfo)
-
-instructions = parser.get_format_instructions()
-
-prompt = PromptTemplate.from_template("""Ти - бібліотекар. Твоє завдання полягає в тому, щоб радити подібні книги на основі назви книги та жанру.
-### ІСТРУКЦІЇ
+### ІНСТРУКЦІЇ
 {instructions}
 
-### НАЗВА КНИГИ
-{book_title}
+### МЕТА ТРЕНУВАНЬ
+{target}
+""",
+    partial_variables={"instructions": instructions_1}
+)
 
-### ЖАНР
-{book_genre}""", partial_variables={'instructions': instructions})
+chain_1 = prompt_1 | llm | parser_1
 
-chain1 = prompt | llm | parser
+user_target = input("Введіть мету тренувань: ")
 
-full_response = chain1.invoke({
-    'book_title': user_book,
-    'book_genre': response.genre
+exercise_response = chain_1.invoke({
+    "target": user_target
 })
 
-for book in full_response.books:
-    print(book)
-=======
-print(response_1.quals)
->>>>>>> aa7f7a2 (.)
+# ---------- ДРУГИЙ ЛАНЦЮГ ----------
+
+class TrainingPlan(BaseModel):
+    plan: str = Field(description="детальний план тренувань на тиждень")
+
+parser_2 = PydanticOutputParser(pydantic_object=TrainingPlan)
+instructions_2 = parser_2.get_format_instructions()
+
+prompt_2 = PromptTemplate.from_template(
+    """Ти — персональний фітнес-інструктор.
+Склади тижневий план тренувань на основі вправ,
+рівня підготовки та доступного часу.
+
+### ІНСТРУКЦІЇ
+{instructions}
+
+### СПИСОК ВПРАВ
+{exercises}
+
+### РІВЕНЬ ПІДГОТОВКИ
+{level}
+
+### ЧАС НА ТИЖДЕНЬ (в годинах)
+{hours}
+""",
+    partial_variables={"instructions": instructions_2}
+)
+
+chain_2 = prompt_2 | llm | parser_2
+
+user_level = input("Введіть рівень підготовки (низький / середній / професіонал): ")
+user_hours = input("Введіть кількість годин на тиждень: ")
+
+training_plan_response = chain_2.invoke({
+    "exercises": ", ".join(exercise_response.exercises),
+    "level": user_level,
+    "hours": user_hours
+})
+
+print("\nПлан тренувань:\n")
+print(training_plan_response.plan)
