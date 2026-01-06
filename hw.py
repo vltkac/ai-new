@@ -1,64 +1,70 @@
 import os
 import dotenv
-from typing import List
-from langchain.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.utilities import GoogleSerperAPIWrapper
+from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import (
     HumanMessage,
-    AIMessage,
     SystemMessage,
-    BaseMessage,
 )
 
 dotenv.load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+serper_api_key = os.getenv("SERPER_API_KEY")
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash-lite",
-    api_key=api_key,
+    model="gemini-2.5-flash",
+    api_key=gemini_api_key,
 )
 
-messages: List[BaseMessage] = [
+searcher = GoogleSerperAPIWrapper(
+    serper_api_key=serper_api_key,
+    type="places",
+)
+
+def get_places_info(query: str) -> list:
+    search_info = searcher.results(query)
+    places = search_info.get("places", [])
+    result = []
+
+    for place in places:
+        info = {
+            "title": place.get("title"),
+            "website": place.get("website"),
+            "rating": place.get("rating"),
+        }
+        result.append(info)
+
+    return result
+
+agent = create_react_agent(
+    model=llm,
+    tools=[get_places_info],
+)
+
+messages = [
     SystemMessage(
         """
-Ти - всезнаючий чат, який може цікаво розповідати про все, що існує у світі.
+Ти - консультант з рекомендацій ресторанів та закладів харчування.
+Користувачі будуть запитувати про ресторани в різних містах та країнах.
+Твоя задача - рекомендувати ресторани, використовуючи інструмент пошуку місць.
+Завжди отримуй дані через інструмент.
+Якщо частини інформації не вистачає - логічно доповни відповідь.
+Описуй ресторани привабливо та зрозуміло.
+Перед використанням інструменту перекладай запит користувача англійською.
+Якщо запит нечіткий - уточни деталі.
 """
     )
 ]
 
-summary_prompt = PromptTemplate.from_template(
-    """
-Ти - помічник для підсумовування інформації.
-Тобі нададуть історію чату.
-Потрібно зробити коротку сводку та зберегти якомога більше важливих деталей.
-Роби лише підсумок тексту без зазначення, хто саме що писав.
-
-# ІСТОРІЯ ЧАТУ
-{history}
-"""
-)
-
-summary_chain = summary_prompt | llm
-
-chat_history_text = ""
-
 while True:
-    user_query = input("Ваше повідомлення: ")
+    user_query = input("Ви: ")
     if user_query == "":
         break
 
     messages.append(HumanMessage(user_query))
-    chat_history_text += f"{user_query}\n"
 
-    response = llm.invoke(messages)
-    messages.append(response)
-    chat_history_text += f"{response.content}\n"
+    response = agent.invoke({"messages": messages})
+    messages = response["messages"]
 
-    print(f"AI: {response.content}")
-
-    non_system = [m for m in messages if not isinstance(m, SystemMessage)]
-
-    if len(non_system) > 4:
-        summary = summary_chain.invoke({"history": chat_history_text})
-        messages = [messages[0], AIMessage(summary.content)]
-        chat_history_text = summary.content + "\n"
+    print(messages[-1].content)
