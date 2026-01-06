@@ -1,86 +1,64 @@
 import os
 import dotenv
 from typing import List
-from pydantic import BaseModel, Field
-from langchain_google_genai import GoogleGenerativeAI
 from langchain.prompts import PromptTemplate
-from langchain.output_parsers import PydanticOutputParser
-
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import (
+    HumanMessage,
+    AIMessage,
+    SystemMessage,
+    BaseMessage,
+)
 
 dotenv.load_dotenv()
-API_KEY = os.getenv("GEMINI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY")
 
-llm = GoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    api_key=API_KEY,
-    temperature=0
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash-lite",
+    api_key=api_key,
 )
 
+messages: List[BaseMessage] = [
+    SystemMessage(
+        """
+Ти - всезнаючий чат, який може цікаво розповідати про все, що існує у світі.
+"""
+    )
+]
 
-class ExerciseList(BaseModel):
-    exercises: List[str] = Field(description="список вправ відповідно до мети тренувань")
+summary_prompt = PromptTemplate.from_template(
+    """
+Ти - помічник для підсумовування інформації.
+Тобі нададуть історію чату.
+Потрібно зробити коротку сводку та зберегти якомога більше важливих деталей.
+Роби лише підсумок тексту без зазначення, хто саме що писав.
 
-parser_1 = PydanticOutputParser(pydantic_object=ExerciseList)
-instructions_1 = parser_1.get_format_instructions()
-
-prompt_1 = PromptTemplate.from_template(
-    """Ти — професійний фітнес-тренер.
-На основі мети тренувань підбери відповідний список вправ.
-
-### ІНСТРУКЦІЇ
-{instructions}
-
-### МЕТА ТРЕНУВАНЬ
-{target}
-""",
-    partial_variables={"instructions": instructions_1}
+# ІСТОРІЯ ЧАТУ
+{history}
+"""
 )
 
-chain_1 = prompt_1 | llm | parser_1
+summary_chain = summary_prompt | llm
 
-user_target = input("Введіть мету тренувань: ")
+chat_history_text = ""
 
-exercise_response = chain_1.invoke({
-    "target": user_target
-})
+while True:
+    user_query = input("Ваше повідомлення: ")
+    if user_query == "":
+        break
 
+    messages.append(HumanMessage(user_query))
+    chat_history_text += f"{user_query}\n"
 
-class TrainingPlan(BaseModel):
-    plan: str = Field(description="детальний план тренувань на тиждень")
+    response = llm.invoke(messages)
+    messages.append(response)
+    chat_history_text += f"{response.content}\n"
 
-parser_2 = PydanticOutputParser(pydantic_object=TrainingPlan)
-instructions_2 = parser_2.get_format_instructions()
+    print(f"AI: {response.content}")
 
-prompt_2 = PromptTemplate.from_template(
-    """Ти — персональний фітнес-інструктор.
-Склади тижневий план тренувань на основі вправ,
-рівня підготовки та доступного часу.
+    non_system = [m for m in messages if not isinstance(m, SystemMessage)]
 
-### ІНСТРУКЦІЇ
-{instructions}
-
-### СПИСОК ВПРАВ
-{exercises}
-
-### РІВЕНЬ ПІДГОТОВКИ
-{level}
-
-### ЧАС НА ТИЖДЕНЬ (в годинах)
-{hours}
-""",
-    partial_variables={"instructions": instructions_2}
-)
-
-chain_2 = prompt_2 | llm | parser_2
-
-user_level = input("Введіть рівень підготовки (низький / середній / професіонал): ")
-user_hours = input("Введіть кількість годин на тиждень: ")
-
-training_plan_response = chain_2.invoke({
-    "exercises": ", ".join(exercise_response.exercises),
-    "level": user_level,
-    "hours": user_hours
-})
-
-print("\nПлан тренувань:\n")
-print(training_plan_response.plan)
+    if len(non_system) > 4:
+        summary = summary_chain.invoke({"history": chat_history_text})
+        messages = [messages[0], AIMessage(summary.content)]
+        chat_history_text = summary.content + "\n"
