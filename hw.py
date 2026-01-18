@@ -1,70 +1,70 @@
 import os
 import dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.utilities import GoogleSerperAPIWrapper
+from pinecone import Pinecone
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
 from langgraph.prebuilt import create_react_agent
-from langchain_core.messages import (
-    HumanMessage,
-    SystemMessage,
-)
+from langchain_core.messages import HumanMessage, SystemMessage
 
 dotenv.load_dotenv()
-gemini_api_key = os.getenv("GEMINI_API_KEY")
-serper_api_key = os.getenv("SERPER_API_KEY")
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
-    api_key=gemini_api_key,
+    api_key=os.getenv("GEMINI_API_KEY"),
 )
 
-searcher = GoogleSerperAPIWrapper(
-    serper_api_key=serper_api_key,
-    type="places",
+embeddings = GoogleGenerativeAIEmbeddings(
+    model="models/text-embedding-004",
+    google_api_key=os.getenv("GEMINI_API_KEY"),
 )
 
-def get_places_info(query: str) -> list:
-    search_info = searcher.results(query)
-    places = search_info.get("places", [])
-    result = []
+pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+index = pc.Index("soup")
 
-    for place in places:
-        info = {
-            "title": place.get("title"),
-            "website": place.get("website"),
-            "rating": place.get("rating"),
-        }
-        result.append(info)
+store = PineconeVectorStore(
+    index=index,
+    embedding=embeddings,
+)
 
-    return result
+
+def search_terms(query: str):
+    return store.similarity_search(query, k=5)
+
 
 agent = create_react_agent(
     model=llm,
-    tools=[get_places_info],
+    tools=[search_terms],
 )
 
-messages = [
+dialog = [
     SystemMessage(
         """
-Ти - консультант з рекомендацій ресторанів та закладів харчування.
-Користувачі будуть запитувати про ресторани в різних містах та країнах.
-Твоя задача - рекомендувати ресторани, використовуючи інструмент пошуку місць.
-Завжди отримуй дані через інструмент.
-Якщо частини інформації не вистачає - логічно доповни відповідь.
-Описуй ресторани привабливо та зрозуміло.
-Перед використанням інструменту перекладай запит користувача англійською.
-Якщо запит нечіткий - уточни деталі.
-"""
+        Ты выступаешь как справочный ассистент по правилам и условиям сервисов Google.
+        Отвечай только на основе найденных фрагментов.
+        Всегда используй инструмент поиска перед формированием ответа.
+        Запрос пользователя сначала приводи к украинскому языку для поиска,
+        но финальный ответ давай на языке запроса.
+        Если информации недостаточно, прямо сообщи об этом.
+
+        Доступный инструмент:
+        - search_terms
+        """
     )
 ]
 
 while True:
-    user_query = input("Ви: ")
-    if user_query == "":
+    text = input("Ви: ")
+    if not text:
         break
 
-    messages.append(HumanMessage(user_query))
+    dialog.append(HumanMessage(text))
 
-    response = agent.invoke({"messages": messages})
-    messages = response["messages"]
+    result = agent.invoke({"messages": dialog})
+    dialog = result["messages"]
 
-    print(messages[-1].content)
+    reply = dialog[-1]
+    print(reply.content)
+    print("\nІсторія")
+
+    for msg in dialog:
+        print(repr(msg))
